@@ -28,10 +28,10 @@
 getPrevalenceChanges <- function(connectionDetails = NULL,
                                  connection = NULL,
                                  cohortDatabaseSchema,
-                                 cohort_id,
+                                 cohortIds,
                                scratch,
-                               cdm_schema,
-                               concept_sets) {
+                               cdmSchema,
+                               conceptSets) {
   
   start <- Sys.time()
   
@@ -77,8 +77,8 @@ getPrevalenceChanges <- function(connectionDetails = NULL,
         dbms = connection@dbms,
         domain_table = dom_name[n],
         domain_concept_id = dom_concept[n],
-        cohort_database_schema = "scratch.dbo",
-        cdm_database_schema =" CDM_jmdc_v1063.dbo",
+        cohort_database_schema = cohortDatabaseSchema,
+        cdm_database_schema = cdmSchema,
         cohort_id = cohortIds,
         min_freq = 5
       )
@@ -97,7 +97,7 @@ getPrevalenceChanges <- function(connectionDetails = NULL,
         domain_table = dom_name[n],
         domain_concept_id = dom_concept[n],
         input_concepts = paste0(freq_con_cohort$concept_id, collapse = ","),
-        cdm_schema = "cdm_schema.dbo"
+        cdm_schema = cdmSchema
       )
     
     freq_con_total <- DatabaseConnector::querySql(connection, 
