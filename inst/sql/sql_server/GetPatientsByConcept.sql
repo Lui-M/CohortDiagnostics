@@ -5,11 +5,8 @@
 {DEFAULT @concept_id = "concept_id"}
 {DEFAULT @cohort_id = "cohort_id"}
 
-SELECT DISTINCT person_id 
-FROM @cdm_schema.@domain_table 
-WHERE person_id IN (
-    SELECT subject_id 
-    FROM @scratch 
-    WHERE cohort_definition_id = @cohort_id
-) 
-AND @domain_concept_id = @concept_id;
+SELECT DISTINCT d.person_id 
+FROM @cdm_schema.@domain_table d
+JOIN @scratch s ON d.person_id = s.subject_id
+WHERE s.cohort_definition_id = @cohort_id
+AND d.@domain_concept_id = @concept_id;

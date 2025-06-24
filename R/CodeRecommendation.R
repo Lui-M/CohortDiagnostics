@@ -1,0 +1,135 @@
+#' Prevalence changes between the cohort and the general population for the most 
+#' frequent codes
+#'
+#' @description Create a table with the codes that has at least a prevalence 
+#' change of 5. The table includes codes from all the domains (Concept id, 
+#' Concept Name, Domain), the proportion of the code within the whole population, 
+#' the proportion of the code within the cohort and the prevalence change result. 
+#'  
+#' @param cohort_id atlas cohort id of the phenotype to be evaluated
+#' @param scratch scratch space where the cohort is available
+#' @param cdm_schema cdm schema name from the dataset
+#' @param concept_sets concepts from the concept set with at least the following
+#' columns (Id = concept_id, Name = concept_name, Domain = as retrieved from ATLAS)
+#' 
+#' @details 
+#'  
+#' ## Required packages
+#' * data.table
+#' 
+#' ## Required functions
+#' * table_freq_concepts
+#' * table_freq_spcf_concepts
+#' 
+#' ## Other requirements
+#' * The connection to the dataset will have to be created before running the function.
+#' 
+#' @author Luisa Martínez (15SEP2024)
+getPrevalenceChanges <- function(connectionDetails = NULL,
+                                 connection = NULL,
+                                 cohortDatabaseSchema,
+                                 cohortIds,
+                               scratch,
+                               cdmSchema,
+                               conceptSets) {
+  
+  start <- Sys.time()
+  
+  if (is.null(connection)) {
+    connection <- DatabaseConnector::connect(connectionDetails)
+    on.exit(DatabaseConnector::disconnect(connection))
+  }
+  
+  # Create vectors for the different domains in the omop cdm
+  # This could be included in a library
+  # Table name
+  dom_name <- c("condition_occurrence",
+                "drug_exposure",
+                "procedure_occurrence",
+                "device_exposure",
+                "measurement",
+                "observation")
+  # Concept identification per table
+  dom_concept <- c("condition_concept_id",
+                   "drug_concept_id",
+                   "procedure_concept_id",
+                   "device_concept_id",
+                   "measurement_concept_id",
+                   "observation_concept_id")
+  # Indication in atlas that correspond to table name
+  dom_atlas <- c("Condition",
+                 "Drug",
+                 "Procedure",
+                 "Device",
+                 "Measurement",
+                 "Observation")
+  
+  complete_table <- NULL
+  
+  # Iterate over all the domains from the omop cdm
+  for (n in 1:length(dom_name)) {
+    # Select the most frequent codes with at least 5% of patients from the 
+    # specific domain
+    sql <-
+      SqlRender::loadRenderTranslateSql(
+        sqlFilename = "GetFrequentConcepts.sql",
+        packageName = utils::packageName(),
+        dbms = connection@dbms,
+        domain_table = dom_name[n],
+        domain_concept_id = dom_concept[n],
+        cohort_database_schema = cohortDatabaseSchema,
+        cdm_database_schema = cdmSchema,
+        cohort_id = cohortIds,
+        min_freq = 5
+      )
+    
+    freq_con_cohort <- DatabaseConnector::querySql(connection, 
+                                                   sql, 
+                                                   snakeCaseToCamelCase = TRUE)
+    
+    # For the most frequent codes in the cohort, calculate the frequency in the 
+    # general population
+    sql <-
+      SqlRender::loadRenderTranslateSql(
+        sqlFilename = "CreateConceptFrequencyTable.sql",
+        packageName = utils::packageName(),
+        dbms = connection@dbms,
+        domain_table = dom_name[n],
+        domain_concept_id = dom_concept[n],
+        input_concepts = paste0(freq_con_cohort$concept_id, collapse = ","),
+        cdm_schema = cdmSchema
+      )
+    
+    freq_con_total <- DatabaseConnector::querySql(connection, 
+                                                  sql, 
+                                                  snakeCaseToCamelCase = TRUE)
+    
+    # Merge the frequency in the cohort with the frequency in the general population
+    freq_table <- as.data.table(merge(freq_con_cohort,
+                                      freq_con_total,
+                                      by = "concept_id"))
+    
+    # Include the domain for the final table
+    freq_table[, domain := dom_atlas[n]]
+    # Calculate the prevalence change and keep PC higher than 5
+    freq_table[, comparator := pop_perc/total_pop_perc]
+    freq_table <- freq_table[comparator > 5]
+    
+    # Join tables by domain
+    complete_table <- rbind(complete_table,
+                            freq_table)
+    
+  }
+  
+  # Clean the table to have specific format to be shown
+  table_to_print <- complete_table[!(concept_id %in% concept_sets$Id)
+                                   , .('Concept id' = concept_id,
+                                       'Concept Name' = concept_name,
+                                       'Domain' = domain,
+                                       'Proportion within the cohort (Pc)' = pop_perc,
+                                       'Proportion within the total population (Pt)' = total_pop_perc,
+                                       'Pc/Pt' = comparator)]
+  
+  return(table_to_print)
+  
+}

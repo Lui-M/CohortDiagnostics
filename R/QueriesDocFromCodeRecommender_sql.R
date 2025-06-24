@@ -15,7 +15,6 @@
 #' @format Plain text SQl file
 #'
 #' @author Luisa Martínez (10SEP2024)
-#' Johnson and Johnson R&D Data Science and Digital Health, Barcelona, Spain  
 "GetFrequentConcepts"
 
 #' @title Query to extract all the patients id with a concept from OMOP CDM
@@ -34,7 +33,6 @@
 #' @format Plain text SQl file
 #' 
 #' @author Luisa Martínez (10SEP2024)
-#' Johnson and Johnson R&D Data Science and Digital Health, Barcelona, Spain  
 "GetPatientsByConcept"
 
 #' @title Query to create a table with concept frequency in the general population
@@ -50,6 +48,5 @@
 #' 
 #' @format Plain text SQl file
 #' 
-#' @author Luisa Martínez (15SEP2024)
-#'  Johnson and Johnson R&D Data Science and Digital Health, Barcelona, Spain 
+#' @author Luisa Martínez (15SEP2024) 
 "CreateConceptFrequencyTable"
