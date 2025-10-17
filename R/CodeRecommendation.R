@@ -160,10 +160,20 @@ getPrevalenceChanges <- function(connectionDetails = NULL,
 #' * The connection to the dataset will have to be created before running the function.
 #' 
 #' @author Luisa Martínez (10SEP2024)
-correlation_analysis <- function(cohort_id,
+getCorrelationAnalysis <- function(connectionDetails = NULL,
+                                 connection = NULL,
+                                 cohortIds,
                                  scratch,
-                                 cdm_schema,
-                                 concept_sets) {
+                                 cdmSchema,
+                                 conceptSets) {
+  
+  start <- Sys.time()
+  
+  if (is.null(connection)) {
+    connection <- DatabaseConnector::connect(connectionDetails)
+    on.exit(DatabaseConnector::disconnect(connection))
+  }
+  
   
   # Create vectors for the different domains in the omop cdm
   # This could be included in a library
@@ -188,7 +198,7 @@ correlation_analysis <- function(cohort_id,
                  "Device",
                  "Measurement",
                  "Observation")
-
+  
   # Create an empty list to store the tables
   output_tables <- list()
   # 6 tables will be generated, one per domain. Iterate over the domains to create them.
@@ -201,27 +211,27 @@ correlation_analysis <- function(cohort_id,
     query <- paste0(table_freq_concepts(dom_name[n], 
                                         dom_concept[n], 
                                         scratch, 
-                                        cdm_schema,
-                                        cohort_id, 
+                                        cdmSchema,
+                                        cohortIds, 
                                         1), " LIMIT 30")
     
     freq_concpt <- as.data.table(dbGetQuery(conn, query))
-    freq_concpt <- freq_concpt[!(concept_id %in% concept_sets$Id)]
+    freq_concpt <- freq_concpt[!(concept_id %in% conceptSets$Id)]
     # Store the most frequent concepts in the list for future use
     output_tables[[paste0(dom_name[n], "_freq_concepts")]] <- freq_concpt
     
     # Iterate over the concepts from the concept_set
-    for (c in 1:length(concept_sets$Id)) {
+    for (c in 1:length(conceptSets$Id)) {
       
       # Determine Domain from the concept
-      dom <- which(dom_atlas == concept_sets$Domain[c])
+      dom <- which(dom_atlas == conceptSets$Domain[c])
       # Generate a query to extract the patients id containing the concept from omop cdm
       query_vector <- query_patientxconcept(dom_name[dom], 
                                             dom_concept[dom],
                                             scratch, 
-                                            cdm_schema,
-                                            concept_sets$Id[c],
-                                            cohort_id)
+                                            cdmSchema,
+                                            conceptSets$Id[c],
+                                            cohortIds)
       
       new_vector <- dbGetQuery(conn, query_vector)
       
@@ -231,7 +241,7 @@ correlation_analysis <- function(cohort_id,
       if(nrow(new_vector) > 0) {
         # Create binary column
         new_vector$concept_id <- 1
-        colnames(new_vector) <- c("person_id", concept_sets$Name[c])
+        colnames(new_vector) <- c("person_id", conceptSets$Name[c])
         patient <- new_vector
         
         # Iterate over the most frequent concepts to complete the correlations table
@@ -241,9 +251,9 @@ correlation_analysis <- function(cohort_id,
           query_vector <- query_patientxconcept(dom_name[n], 
                                                 dom_concept[n], 
                                                 scratch, 
-                                                cdm_schema,
+                                                cdmSchema,
                                                 freq_concpt[code, concept_id],
-                                                cohort_id)
+                                                cohortIds)
           
           new_vector <- dbGetQuery(conn, query_vector)
           # Create binary column
@@ -278,7 +288,7 @@ correlation_analysis <- function(cohort_id,
     }
     
     output_tables[[paste0(dom_name[n], "_correlations")]] <- comp_cor[]
-
+    
   }
   
   return(output_tables)
