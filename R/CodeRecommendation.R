@@ -25,11 +25,10 @@
 #' * The connection to the dataset will have to be created before running the function.
 #' 
 #' @author Luisa Martínez (15SEP2024)
-getPrevalenceChanges <- function(connectionDetails = NULL,
+getProportionChanges <- function(connectionDetails = NULL,
                                  connection = NULL,
                                  cohortDatabaseSchema,
                                  cohortIds,
-                               scratch,
                                cdmSchema,
                                conceptSets) {
   
