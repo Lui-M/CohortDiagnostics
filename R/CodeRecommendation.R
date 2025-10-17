@@ -207,14 +207,27 @@ getCorrelationAnalysis <- function(connectionDetails = NULL,
     comp_cor <- NULL
     # Select the 30 most frequent codes with at least 30% of patients from the 
     # specific domain
-    query <- paste0(table_freq_concepts(dom_name[n], 
-                                        dom_concept[n], 
-                                        scratch, 
-                                        cdmSchema,
-                                        cohortIds, 
-                                        1), " LIMIT 30")
+    sql <-
+      SqlRender::loadRenderTranslateSql(
+        sqlFilename = "GetFrequentConcepts.sql",
+        packageName = utils::packageName(),
+        dbms = connection@dbms,
+        domain_table = dom_name[n],
+        domain_concept_id = dom_concept[n],
+        cohort_database_schema = cohortDatabaseSchema,
+        cdm_database_schema = cdmSchema,
+        cohort_id = cohortIds,
+        min_freq = 1
+      )
     
-    freq_concpt <- as.data.table(dbGetQuery(conn, query))
+    sql <- paste(sql, "LIMIT 30")
+    
+    freq_concpt <- DatabaseConnector::querySql(connection, 
+                                                   sql, 
+                                                   snakeCaseToCamelCase = TRUE)
+  
+    
+    freq_concpt <- as.data.table(freq_concpt)
     freq_concpt <- freq_concpt[!(concept_id %in% conceptSets$Id)]
     # Store the most frequent concepts in the list for future use
     output_tables[[paste0(dom_name[n], "_freq_concepts")]] <- freq_concpt
@@ -224,15 +237,23 @@ getCorrelationAnalysis <- function(connectionDetails = NULL,
       
       # Determine Domain from the concept
       dom <- which(dom_atlas == conceptSets$Domain[c])
-      # Generate a query to extract the patients id containing the concept from omop cdm
-      query_vector <- query_patientxconcept(dom_name[dom], 
-                                            dom_concept[dom],
-                                            scratch, 
-                                            cdmSchema,
-                                            conceptSets$Id[c],
-                                            cohortIds)
+      # Generate a query to extract the patients ids containing the concept from omop cdm
+      sql <-
+        SqlRender::loadRenderTranslateSql(
+          sqlFilename = "GetPatientsByConcept.sql",
+          packageName = utils::packageName(),
+          dbms = connection@dbms,
+          domain_table = dom_name[dom],
+          domain_concept_id = dom_concept[dom],
+          scratch = cohortDatabaseSchema,
+          cdm_schema = cdmSchema,
+          concept_id = conceptSets$Id[c],
+          cohort_id = cohortIds
+        )
       
-      new_vector <- dbGetQuery(conn, query_vector)
+      new_vector <- DatabaseConnector::querySql(connection, 
+                                                 sql, 
+                                                 snakeCaseToCamelCase = TRUE)
       
       # If there is at least one patient with the code, include it in the final table
       # where there is a row per patient and a binary column per code and the 
@@ -247,14 +268,23 @@ getCorrelationAnalysis <- function(connectionDetails = NULL,
         for (code in 1:nrow(freq_concpt)) {
           
           # Generate a query to extract the patients id containing the concept from omop cdm
-          query_vector <- query_patientxconcept(dom_name[n], 
-                                                dom_concept[n], 
-                                                scratch, 
-                                                cdmSchema,
-                                                freq_concpt[code, concept_id],
-                                                cohortIds)
+          sql <-
+            SqlRender::loadRenderTranslateSql(
+              sqlFilename = "GetPatientsByConcept.sql",
+              packageName = utils::packageName(),
+              dbms = connection@dbms,
+              domain_table = dom_name[n],
+              domain_concept_id = dom_concept[n],
+              scratch = cohortDatabaseSchema,
+              cdm_schema = cdmSchema,
+              concept_id = freq_concpt[code, concept_id],
+              cohort_id = cohortIds
+            )
           
-          new_vector <- dbGetQuery(conn, query_vector)
+          new_vector <- DatabaseConnector::querySql(connection, 
+                                                    sql, 
+                                                    snakeCaseToCamelCase = TRUE)
+      
           # Create binary column
           new_vector$concept_id <- 1
           colnames(new_vector) <- c("person_id", freq_concpt[code, concept_name])
